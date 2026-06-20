@@ -5,7 +5,7 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server);
 const mongoose = require('mongoose');
-const path = require('path'); // 🔥 Added the path library for cross-platform compliance
+const path = require('path');
 
 const LOCAL_DB_URL = "mongodb://127.0.0.1:27017/CommuteDB";
 const CLOUD_DB_URL = "mongodb+srv://Aniket001:Wi5iVScdg3uvGBno@cluster0.j3031go.mongodb.net/CommuteDB?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true";
@@ -33,15 +33,14 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 let sandboxUsers = [];
+// 🌐 LIVE SOCKET DIRECTORY: Maps a person's database ID to their active network session
+let onlineSockets = {}; 
 
 app.use(express.json());
-
-// 🔥 FIX 1: Point your static files middleware using an explicit absolute directory path
 app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 
-// 🔥 FIX 2: Point the main home page root strictly to your resolved index file pathway
 app.get('/', (request, response) => {
     response.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -142,20 +141,46 @@ app.get('/api/discover/:userId', async (request, response) => {
     } catch (err) { response.status(500).json({ error: "Matching error" }); }
 });
 
-// --- REAL-TIME CHAT CORNERSTONE ---
+// --- TELEMETRY BROADCAST ENGINE ---
 io.on('connection', (socket) => {
+
+    // Mount user mapping session
+    socket.on('register_network_user', (userId) => {
+        socket.userId = userId;
+        onlineSockets[userId] = socket.id;
+        console.log(`📡 Linked User Session: [${userId}] mapped to Socket [${socket.id}]`);
+    });
+
+    // Handle incoming chat requests across separate instances
+    socket.on('request_chat_handshake', (data) => {
+        const recipientSocketId = onlineSockets[data.targetPeerId];
+        if (recipientSocketId) {
+            // Send request alert pop-up trigger down to the other user's active session window
+            io.to(recipientSocketId).emit('incoming_chat_invite', {
+                senderId: data.senderId,
+                senderName: data.senderName,
+                roomId: data.roomId
+            });
+        }
+    });
+
     socket.on('join_room', (roomId) => {
         socket.join(roomId);
         console.log(`👥 Active WebSocket connection inside Room: ${roomId}`);
     });
 
     socket.on('send_message', (data) => {
-        console.log(`📩 Routing: [${data.sender}] -> Room [${data.room}]: ${data.message}`);
         io.to(data.room).emit('receive_message', data);
     });
 
     socket.on('typing_signal', (data) => {
         socket.to(data.room).emit('typing_receive', data);
+    });
+
+    socket.on('disconnect', () => {
+        if (socket.userId && onlineSockets[socket.userId] === socket.id) {
+            delete onlineSockets[socket.userId];
+        }
     });
 });
 

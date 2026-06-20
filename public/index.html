@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Commute - Connect</title>
+    <title>Commute - Dynamic Network</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         :root { --bg-dark: #0f172a; --panel-dark: #1e293b; --accent-primary: #10b981; --accent-secondary: #3b82f6; --text-main: #f8fafc; --text-muted: #94a3b8; }
-        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; }
+        
+        /* 🔥 NEW ELEMENT: Multi-User Invitation Banner Alert Styling */
+        .invite-alert-bar { display: none; width: 100%; max-width: 550px; background-color: #f59e0b; color: #0f172a; padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 15px; text-align: center; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3); }
+        .invite-btn { background-color: #0f172a; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; border: none; cursor: pointer; margin-left: 10px; }
+
         .container { background-color: var(--panel-dark); width: 100%; max-width: 550px; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: none; }
         .active-view { display: block !important; }
         h1, h2 { text-align: center; color: var(--accent-primary); margin-top: 0; }
@@ -42,7 +47,11 @@
 </head>
 <body>
 
-    <!-- SCREEN 1: AUTH -->
+    <div class="invite-alert-bar" id="global-invite-panel">
+        <span id="invite-message-text">Incoming chat request...</span>
+        <button class="invite-btn" onclick="acceptIncomingChatHandshake()">Join Chat 💬</button>
+    </div>
+
     <div class="container active-view" id="auth-view">
         <h1 id="auth-title">Create Account</h1>
         <div class="subtitle">Join anonymously on Commute</div>
@@ -52,7 +61,6 @@
         <div class="toggle-link" onclick="toggleAuthMode()">Already have an account? Log In</div>
     </div>
 
-    <!-- SCREEN 2: PROFILE PROFILE BUILDER -->
     <div class="container" id="profile-view">
         <h2>Set Up Profile</h2>
         <div class="form-group"><label>Anonymous Alias Handle</label><input type="text" id="p-username"></div>
@@ -74,14 +82,12 @@
         <button onclick="saveProfileData()">Save & View Discover Feed ✨</button>
     </div>
 
-    <!-- SCREEN 3: FEED -->
     <div class="container" id="discover-view">
         <h2>Kindred Discovery Feed</h2>
         <button onclick="loadDiscoverDashboard()" style="background-color: #475569; margin-bottom: 15px;">🔄 Refresh Feed</button>
         <div class="discover-list" id="discover-list-container"></div>
     </div>
 
-    <!-- SCREEN 4: CHAT -->
     <div class="container" id="chat-view">
         <h2>Secure Chat Room</h2>
         <div id="chat-banner-info" class="match-banner">Connecting...</div>
@@ -90,17 +96,28 @@
             <input type="text" id="msg-input" onkeypress="if(event.key==='Enter') sendDirectMessage()">
             <button onclick="sendDirectMessage()">Send 📩</button>
         </div>
+        <button onclick="loadDiscoverDashboard()" style="background-color: #ef4444; margin-top: 15px;">🚪 Exit Chat Room</button>
     </div>
 
 <script>
-    let socket;
+    // Initialize standard core background socket loop early so it can catch invitations immediately
+    const globalSocket = io();
+    
     let currentUserId = "";
     let myRegisteredAlias = "";
     let isLoginMode = false;
     let currentRoomId = "";
+    let deepInviteCache = null;
 
     let formTraits = [];
     let formInterests = [];
+
+    // Global listener to trap inbound cross-tab connection pings instantly
+    globalSocket.on('incoming_chat_invite', (data) => {
+        deepInviteCache = data;
+        document.getElementById('invite-message-text').innerText = `🔔 ${data.senderName} wants to chat with you!`;
+        document.getElementById('global-invite-panel').style.display = "flex";
+    });
 
     function toggleAuthMode() {
         isLoginMode = !isLoginMode;
@@ -129,6 +146,10 @@
         if (data.error) return alert(data.error);
 
         currentUserId = data.userId;
+        
+        // Register connection map session right onto the server RAM channel
+        globalSocket.emit('register_network_user', currentUserId);
+
         if (isLoginMode && data.hasProfile) loadDiscoverDashboard(); else showView('profile-view');
     }
 
@@ -150,7 +171,7 @@
         const matches = await res.json();
         
         const container = document.getElementById('discover-list-container');
-        container.innerHTML = matches.length === 0 ? "<div class='subtitle'>No other active users online yet. Log into your second browser window to see cards pop up!</div>" : "";
+        container.innerHTML = matches.length === 0 ? "<div class='subtitle'>No other active users online yet.</div>" : "";
 
         matches.forEach(peer => {
             const card = document.createElement('div');
@@ -159,26 +180,47 @@
                 <div class="match-pct">${peer.matchScore}% Match</div>
                 <div class="card-name">${peer.username}</div>
                 <div class="card-bio">${peer.bio}</div>
-                <button class="card-btn" onclick="openChatLane('${peer.id}', '${peer.username}')">Chat 💬</button>
+                <button class="card-btn" onclick="sendChatInvitationRequest('${peer.id}', '${peer.username}')">Chat 💬</button>
             `;
             container.appendChild(card);
         });
     }
 
-    function openChatLane(peerId, peerName) {
-        showView('chat-view');
-        document.getElementById('chat-banner-info').innerText = `Chatting securely with: ${peerName}`;
-        
-        // 🔥 SOLID MATCH ROOM FORMULA: Alphabetically sorted IDs ensure Chrome and Edge match perfectly!
+    // 🔥 OUTBOUND HANDSHAKE: Notify the third person instantly over the socket grid
+    function sendChatInvitationRequest(peerId, peerName) {
         currentRoomId = [currentUserId.toString(), peerId.toString()].sort().join("_");
+        
+        // Fire request payload packet down to the recipient
+        globalSocket.emit('request_chat_handshake', {
+            targetPeerId: peerId,
+            senderId: currentUserId,
+            senderName: myRegisteredAlias || "Anonymous Soul",
+            roomId: currentRoomId
+        });
 
-        socket = io();
-        socket.emit('join_room', currentRoomId);
+        // Drop sender into the unified chat lane automatically
+        launchLiveChatPanel(currentRoomId, peerName);
+    }
 
-        // Turn off any old duplicate listeners
-        socket.off('receive_message');
-        socket.on('receive_message', (data) => {
-            // Draw incoming message on screen only if it comes from the other user
+    // 🔥 INBOUND ACCEPTANCE: Fired when user clicks the drop-down notification alert bar
+    function acceptIncomingChatHandshake() {
+        if (!deepInviteCache) return;
+        document.getElementById('global-invite-panel').style.display = "none";
+        
+        currentRoomId = deepInviteCache.roomId;
+        launchLiveChatPanel(currentRoomId, deepInviteCache.senderName);
+        deepInviteCache = null;
+    }
+
+    function launchLiveChatPanel(roomId, partnerName) {
+        showView('chat-view');
+        document.getElementById('chat-box-area').innerHTML = ""; // Wipe cleanly
+        document.getElementById('chat-banner-info').innerText = `Chat Link Active with: ${partnerName}`;
+        
+        globalSocket.emit('join_room', roomId);
+
+        globalSocket.off('receive_message');
+        globalSocket.on('receive_message', (data) => {
             if (data.senderId !== currentUserId) {
                 appendMsg(data.sender, data.message, 'incoming');
             }
@@ -190,7 +232,7 @@
         const msg = input.value.trim();
         if (!msg) return;
 
-        socket.emit('send_message', { room: currentRoomId, sender: myRegisteredAlias, senderId: currentUserId, message: msg });
+        globalSocket.emit('send_message', { room: currentRoomId, sender: myRegisteredAlias, senderId: currentUserId, message: msg });
         appendMsg('You', msg, 'outgoing');
         input.value = "";
     }
