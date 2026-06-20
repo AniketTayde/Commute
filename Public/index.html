@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commute - Connect</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root { --bg-dark: #0f172a; --panel-dark: #1e293b; --accent-primary: #10b981; --accent-secondary: #3b82f6; --text-main: #f8fafc; --text-muted: #94a3b8; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
+        .container { background-color: var(--panel-dark); width: 100%; max-width: 550px; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: none; }
+        .active-view { display: block !important; }
+        h1, h2 { text-align: center; color: var(--accent-primary); margin-top: 0; }
+        .subtitle { color: var(--text-muted); text-align: center; margin-bottom: 25px; font-size: 0.9rem; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; }
+        input[type="text"], input[type="password"], textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #475569; background-color: #0f172a; color: var(--text-main); box-sizing: border-box; }
+        .tag-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tag { background-color: #334155; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 0.8rem; user-select: none; }
+        .tag.selected-trait { background-color: rgba(16,185,129,0.2); border-color: var(--accent-primary); color: var(--accent-primary); border: 1px solid; }
+        .tag.selected-interest { background-color: rgba(59,130,246,0.2); border-color: var(--accent-secondary); color: var(--accent-secondary); border: 1px solid; }
+        button { width: 100%; padding: 12px; background-color: var(--accent-primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        .toggle-link { color: var(--accent-secondary); text-align: center; margin-top: 15px; cursor: pointer; font-size: 0.9rem; }
+        .discover-list { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
+        .user-card { background-color: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+        .match-pct { position: absolute; top: 16px; right: 16px; background-color: rgba(16,185,129,0.15); border: 1px solid var(--accent-primary); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; color: var(--accent-primary); }
+        .card-name { font-size: 1.1rem; font-weight: 700; }
+        .card-bio { font-size: 0.88rem; color: var(--text-muted); }
+        .card-btn { background-color: var(--accent-secondary); width: auto; align-self: flex-start; padding: 6px 16px; font-size: 0.85rem; }
+        .chat-box { background-color: #0f172a; height: 300px; border-radius: 8px; border: 1px solid #334155; padding: 15px; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
+        .message-wrapper { display: flex; flex-direction: column; max-width: 85%; }
+        .message-wrapper.incoming { align-self: flex-start; }
+        .message-wrapper.outgoing { align-self: flex-end; }
+        .message { padding: 8px 12px; border-radius: 10px; font-size: 0.92rem; }
+        .incoming .message { background-color: #334155; }
+        .outgoing .message { background-color: var(--accent-primary); }
+        .chat-input-area { display: flex; gap: 8px; }
+        .chat-input-area input { flex: 1; }
+        .chat-input-area button { width: auto; background-color: var(--accent-secondary); }
+        .match-banner { background-color: rgba(59,130,246,0.15); border: 1px solid var(--accent-secondary); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-size: 0.9rem; color: #60a5fa; }
+    </style>
+</head>
+<body>
+
+    <!-- SCREEN 1: AUTH -->
+    <div class="container active-view" id="auth-view">
+        <h1 id="auth-title">Create Account</h1>
+        <div class="subtitle">Join anonymously on Commute</div>
+        <div class="form-group"><label>Gmail ID or Mobile Number</label><input type="text" id="auth-contact"></div>
+        <div class="form-group"><label>Password</label><input type="password" id="auth-password"></div>
+        <button onclick="executeAuth()">Sign Up</button>
+        <div class="toggle-link" onclick="toggleAuthMode()">Already have an account? Log In</div>
+    </div>
+
+    <!-- SCREEN 2: PROFILE PROFILE BUILDER -->
+    <div class="container" id="profile-view">
+        <h2>Set Up Profile</h2>
+        <div class="form-group"><label>Anonymous Alias Handle</label><input type="text" id="p-username"></div>
+        <div class="form-group"><label>Bio</label><textarea id="p-bio"></textarea></div>
+        <div class="form-group">
+            <label>Traits</label>
+            <div class="tag-grid">
+                <div class="tag" onclick="toggleSelection(this, 'traits', 'Introverted')">🎭 Introverted</div>
+                <div class="tag" onclick="toggleSelection(this, 'traits', 'Extroverted')">⚡ Extroverted</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Interests</label>
+            <div class="tag-grid">
+                <div class="tag" onclick="toggleSelection(this, 'interests', 'Coding')">💻 Coding</div>
+                <div class="tag" onclick="toggleSelection(this, 'interests', 'Music')">🎵 Music</div>
+            </div>
+        </div>
+        <button onclick="saveProfileData()">Save & View Discover Feed ✨</button>
+    </div>
+
+    <!-- SCREEN 3: FEED -->
+    <div class="container" id="discover-view">
+        <h2>Kindred Discovery Feed</h2>
+        <button onclick="loadDiscoverDashboard()" style="background-color: #475569; margin-bottom: 15px;">🔄 Refresh Feed</button>
+        <div class="discover-list" id="discover-list-container"></div>
+    </div>
+
+    <!-- SCREEN 4: CHAT -->
+    <div class="container" id="chat-view">
+        <h2>Secure Chat Room</h2>
+        <div id="chat-banner-info" class="match-banner">Connecting...</div>
+        <div class="chat-box" id="chat-box-area"></div>
+        <div class="chat-input-area">
+            <input type="text" id="msg-input" onkeypress="if(event.key==='Enter') sendDirectMessage()">
+            <button onclick="sendDirectMessage()">Send 📩</button>
+        </div>
+    </div>
+
+<script>
+    let socket;
+    let currentUserId = "";
+    let myRegisteredAlias = "";
+    let isLoginMode = false;
+    let currentRoomId = "";
+
+    let formTraits = [];
+    let formInterests = [];
+
+    function toggleAuthMode() {
+        isLoginMode = !isLoginMode;
+        document.getElementById('auth-title').innerText = isLoginMode ? "Log In" : "Create Account";
+    }
+
+    function toggleSelection(element, type, val) {
+        let arr = type === 'traits' ? formTraits : formInterests;
+        element.classList.toggle(type === 'traits' ? 'selected-trait' : 'selected-interest');
+        if (arr.includes(val)) arr = arr.filter(v => v !== val); else arr.push(val);
+        if (type === 'traits') formTraits = arr; else formInterests = arr;
+    }
+
+    function showView(viewId) {
+        document.querySelectorAll('.container').forEach(el => el.classList.remove('active-view'));
+        document.getElementById(viewId).classList.add('active-view');
+    }
+
+    async function executeAuth() {
+        const contact = document.getElementById('auth-contact').value.trim();
+        const password = document.getElementById('auth-password').value.trim();
+        const path = isLoginMode ? '/api/auth/login' : '/api/auth/signup';
+        
+        const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact, password }) });
+        const data = await res.json();
+        if (data.error) return alert(data.error);
+
+        currentUserId = data.userId;
+        if (isLoginMode && data.hasProfile) loadDiscoverDashboard(); else showView('profile-view');
+    }
+
+    async function saveProfileData() {
+        myRegisteredAlias = document.getElementById('p-username').value.trim();
+        const bio = document.getElementById('p-bio').value.trim();
+        
+        await fetch('/api/profile/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUserId, username: myRegisteredAlias, bio, traits: formTraits, interests: formInterests })
+        });
+        loadDiscoverDashboard();
+    }
+
+    async function loadDiscoverDashboard() {
+        showView('discover-view');
+        const res = await fetch(`/api/discover/${currentUserId}`);
+        const matches = await res.json();
+        
+        const container = document.getElementById('discover-list-container');
+        container.innerHTML = matches.length === 0 ? "<div class='subtitle'>No other active users online yet. Log into your second browser window to see cards pop up!</div>" : "";
+
+        matches.forEach(peer => {
+            const card = document.createElement('div');
+            card.className = "user-card";
+            card.innerHTML = `
+                <div class="match-pct">${peer.matchScore}% Match</div>
+                <div class="card-name">${peer.username}</div>
+                <div class="card-bio">${peer.bio}</div>
+                <button class="card-btn" onclick="openChatLane('${peer.id}', '${peer.username}')">Chat 💬</button>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function openChatLane(peerId, peerName) {
+        showView('chat-view');
+        document.getElementById('chat-banner-info').innerText = `Chatting securely with: ${peerName}`;
+        
+        // 🔥 SOLID MATCH ROOM FORMULA: Alphabetically sorted IDs ensure Chrome and Edge match perfectly!
+        currentRoomId = [currentUserId.toString(), peerId.toString()].sort().join("_");
+
+        socket = io();
+        socket.emit('join_room', currentRoomId);
+
+        // Turn off any old duplicate listeners
+        socket.off('receive_message');
+        socket.on('receive_message', (data) => {
+            // Draw incoming message on screen only if it comes from the other user
+            if (data.senderId !== currentUserId) {
+                appendMsg(data.sender, data.message, 'incoming');
+            }
+        });
+    }
+
+    function sendDirectMessage() {
+        const input = document.getElementById('msg-input');
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        socket.emit('send_message', { room: currentRoomId, sender: myRegisteredAlias, senderId: currentUserId, message: msg });
+        appendMsg('You', msg, 'outgoing');
+        input.value = "";
+    }
+
+    function appendMsg(sender, text, type) {
+        const box = document.getElementById('chat-box-area');
+        const wrap = document.createElement('div');
+        wrap.className = `message-wrapper ${type}`;
+        wrap.innerHTML = `<div class="message"><strong>${sender}:</strong> ${text}</div>`;
+        box.appendChild(wrap);
+        box.scrollTop = box.scrollHeight;
+    }
+</script>
+</body>
+</html>
