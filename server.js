@@ -33,7 +33,6 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 
 let sandboxUsers = [];
-// 🌐 LIVE SOCKET DIRECTORY: Maps a person's database ID to their active network session
 let onlineSockets = {}; 
 
 app.use(express.json());
@@ -45,12 +44,11 @@ app.get('/', (request, response) => {
     response.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Signup
+// Auth Pipelines
 app.post('/api/auth/signup', async (request, response) => {
     try {
         const { contact, password } = request.body;
         if (!contact || !password) return response.status(400).json({ error: "All fields are required!" });
-
         let userId;
         if (mongoose.connection.readyState === 1) {
             const existingUser = await User.findOne({ contact });
@@ -60,14 +58,12 @@ app.post('/api/auth/signup', async (request, response) => {
             userId = newUser._id;
         } else {
             userId = "sb_" + Math.random().toString(36).substr(2, 9);
-            const newSandboxUser = { _id: userId, contact, password, username: "", bio: "", traits: [], interests: [], dislikes: [] };
-            sandboxUsers.push(newSandboxUser);
+            sandboxUsers.push({ _id: userId, contact, password, username: "", bio: "", traits: [], interests: [], dislikes: [] });
         }
         response.status(201).json({ message: "Success", userId });
     } catch (err) { response.status(500).json({ error: "Server Error" }); }
 });
 
-// Login
 app.post('/api/auth/login', async (request, response) => {
     try {
         const { contact, password } = request.body;
@@ -77,12 +73,11 @@ app.post('/api/auth/login', async (request, response) => {
             return response.json({ userId: user._id, hasProfile: !!user.username });
         }
         const sbUser = sandboxUsers.find(u => u.contact === contact && u.password === password);
-        if (!sbUser) return response.status(400).json({ error: "User not found in sandbox memory!" });
+        if (!sbUser) return response.status(400).json({ error: "User not found!" });
         response.json({ userId: sbUser._id, hasProfile: !!sbUser.username });
     } catch (err) { response.status(500).json({ error: "Server Error" }); }
 });
 
-// Save Profile
 app.post('/api/profile/save', async (request, response) => {
     try {
         const { userId, username, bio, traits, interests, dislikes } = request.body;
@@ -90,25 +85,16 @@ app.post('/api/profile/save', async (request, response) => {
             await User.findByIdAndUpdate(userId, { username, bio, traits, interests, dislikes });
         } else {
             let sbUser = sandboxUsers.find(u => u._id === userId);
-            if (sbUser) {
-                sbUser.username = username;
-                sbUser.bio = bio;
-                sbUser.traits = traits || [];
-                sbUser.interests = interests || [];
-                sbUser.dislikes = dislikes || [];
-            }
+            if (sbUser) { Object.assign(sbUser, { username, bio, traits, interests, dislikes }); }
         }
         response.json({ message: "Saved!" });
     } catch (err) { response.status(500).json({ error: "Error saving profile" }); }
 });
 
-// Discovery Engine
 app.get('/api/discover/:userId', async (request, response) => {
     try {
         const currentUserId = request.params.userId;
-        let currentUser = null;
-        let allOtherUsers = [];
-
+        let currentUser = null, allOtherUsers = [];
         if (mongoose.connection.readyState === 1) {
             currentUser = await User.findById(currentUserId);
             allOtherUsers = await User.find({ _id: { $ne: currentUserId } });
@@ -116,57 +102,45 @@ app.get('/api/discover/:userId', async (request, response) => {
             currentUser = sandboxUsers.find(u => u._id === currentUserId);
             allOtherUsers = sandboxUsers.filter(u => u._id.toString() !== currentUserId.toString());
         }
-
         if (!currentUser) currentUser = { traits: [], interests: [], dislikes: [] };
-
         let matchFeed = allOtherUsers.map(user => {
             let score = 50; 
             if (currentUser.traits) {
-                user.traits.forEach(t => { if (currentUser.traits.includes(t)) score += 10; });
-                user.interests.forEach(i => { if (currentUser.interests.includes(i)) score += 5; });
-                user.dislikes.forEach(d => { if (currentUser.dislikes.includes(d)) score += 2; });
+                (user.traits || []).forEach(t => { if (currentUser.traits.includes(t)) score += 10; });
+                (user.interests || []).forEach(i => { if (currentUser.interests.includes(i)) score += 5; });
+                (user.dislikes || []).forEach(d => { if (currentUser.dislikes.includes(d)) score += 2; });
             }
             if (score > 100) score = 100;
-
-            return {
-                id: user._id,
-                username: user.username || "Anonymous Soul",
-                bio: user.bio || "No bio added yet.",
-                matchScore: score
-            };
+            return { id: user._id, username: user.username || "Anonymous Soul", bio: user.bio || "No bio added.", matchScore: score };
         });
-
         matchFeed.sort((a, b) => b.matchScore - a.matchScore);
         response.json(matchFeed);
     } catch (err) { response.status(500).json({ error: "Matching error" }); }
 });
 
-// --- TELEMETRY BROADCAST ENGINE ---
+// --- HYBRID TELEMETRY CORNERSTONE ---
 io.on('connection', (socket) => {
-
-    // Mount user mapping session
     socket.on('register_network_user', (userId) => {
         socket.userId = userId;
         onlineSockets[userId] = socket.id;
-        console.log(`📡 Linked User Session: [${userId}] mapped to Socket [${socket.id}]`);
     });
 
-    // Handle incoming chat requests across separate instances
+    // Handle cross-tab connection signals for real-time sidebar append
     socket.on('request_chat_handshake', (data) => {
         const recipientSocketId = onlineSockets[data.targetPeerId];
         if (recipientSocketId) {
-            // Send request alert pop-up trigger down to the other user's active session window
             io.to(recipientSocketId).emit('incoming_chat_invite', {
                 senderId: data.senderId,
                 senderName: data.senderName,
-                roomId: data.roomId
+                roomId: data.roomId,
+                isGroup: data.isGroup || false
             });
         }
     });
 
     socket.on('join_room', (roomId) => {
         socket.join(roomId);
-        console.log(`👥 Active WebSocket connection inside Room: ${roomId}`);
+        console.log(`👥 Session joined channel room index: ${roomId}`);
     });
 
     socket.on('send_message', (data) => {

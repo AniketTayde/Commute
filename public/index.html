@@ -3,58 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Commute - Dynamic Network</title>
+    <title>Commute - Hybrid Core Network</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        :root { --bg-dark: #0f172a; --panel-dark: #1e293b; --accent-primary: #10b981; --accent-secondary: #3b82f6; --text-main: #f8fafc; --text-muted: #94a3b8; }
-        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; }
+        :root { --bg-dark: #0f172a; --panel-dark: #1e293b; --accent-emerald: #10b981; --accent-blue: #3b82f6; --text-main: #f8fafc; --text-muted: #94a3b8; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg-dark); color: var(--text-main); margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; box-sizing: border-box; }
         
-        /* 🔥 NEW ELEMENT: Multi-User Invitation Banner Alert Styling */
-        .invite-alert-bar { display: none; width: 100%; max-width: 550px; background-color: #f59e0b; color: #0f172a; padding: 12px; border-radius: 8px; font-weight: bold; margin-bottom: 15px; text-align: center; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3); }
-        .invite-btn { background-color: #0f172a; color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; border: none; cursor: pointer; margin-left: 10px; }
-
-        .container { background-color: var(--panel-dark); width: 100%; max-width: 550px; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: none; }
+        .container { background-color: var(--panel-dark); width: 100%; max-width: 900px; padding: 25px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: none; }
         .active-view { display: block !important; }
-        h1, h2 { text-align: center; color: var(--accent-primary); margin-top: 0; }
-        .subtitle { color: var(--text-muted); text-align: center; margin-bottom: 25px; font-size: 0.9rem; }
+        
+        /* 🎛️ HYBRID DASHBOARD SPLIT-PANEL LAYOUT */
+        .dashboard-layout { display: grid; grid-template-columns: 240px 1fr; gap: 20px; height: 550px; margin-top: 15px; }
+        
+        /* 🗂️ SIDEBAR ENGINE STYLING */
+        .sidebar { background-color: #0f172a; border-radius: 12px; border: 1px solid #334155; padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+        .sidebar-section-title { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-top: 10px; margin-bottom: 5px; }
+        
+        .channel-tab { padding: 10px 12px; background-color: #1e293b; border-radius: 8px; font-size: 0.88rem; cursor: pointer; border: 1px solid transparent; display: flex; align-items: center; justify-content: space-between; transition: 0.2s ease; }
+        .channel-tab:hover { background-color: #334155; }
+        .channel-tab.active-channel { background-color: rgba(59,130,246,0.15); border-color: var(--accent-blue); color: #60a5fa; }
+        .unread-indicator { width: 8px; height: 8px; background-color: #f59e0b; border-radius: 50%; }
+
+        /* 💬 CONSOLE AREA VIEWPORTS */
+        .main-workspace { display: flex; flex-direction: column; background-color: #0f172a; border-radius: 12px; border: 1px solid #334155; padding: 15px; position: relative; }
+        .discover-workspace { overflow-y: auto; height: 100%; display: none; flex-direction: column; gap: 15px; }
+        .chat-workspace { display: none; flex-direction: column; height: 100%; justify-content: space-between; }
+        .active-workspace { display: flex !important; }
+
+        h1, h2 { color: var(--accent-emerald); margin-top: 0; text-align: center; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; font-weight: 600; }
         input[type="text"], input[type="password"], textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #475569; background-color: #0f172a; color: var(--text-main); box-sizing: border-box; }
+        
         .tag-grid { display: flex; flex-wrap: wrap; gap: 8px; }
         .tag { background-color: #334155; padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 0.8rem; user-select: none; }
-        .tag.selected-trait { background-color: rgba(16,185,129,0.2); border-color: var(--accent-primary); color: var(--accent-primary); border: 1px solid; }
-        .tag.selected-interest { background-color: rgba(59,130,246,0.2); border-color: var(--accent-secondary); color: var(--accent-secondary); border: 1px solid; }
-        button { width: 100%; padding: 12px; background-color: var(--accent-primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; }
-        .toggle-link { color: var(--accent-secondary); text-align: center; margin-top: 15px; cursor: pointer; font-size: 0.9rem; }
-        .discover-list { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
-        .user-card { background-color: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; position: relative; }
-        .match-pct { position: absolute; top: 16px; right: 16px; background-color: rgba(16,185,129,0.15); border: 1px solid var(--accent-primary); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; color: var(--accent-primary); }
+        .tag.selected-trait { background-color: rgba(16,185,129,0.2); border-color: var(--accent-emerald); color: var(--accent-emerald); border: 1px solid; }
+        .tag.selected-interest { background-color: rgba(59,130,246,0.2); border-color: var(--accent-blue); color: var(--accent-blue); border: 1px solid; }
+        
+        button { padding: 12px; background-color: var(--accent-emerald); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        .toggle-link { color: var(--accent-blue); text-align: center; margin-top: 15px; cursor: pointer; font-size: 0.9rem; }
+        
+        .user-card { background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+        .match-pct { position: absolute; top: 16px; right: 16px; background-color: rgba(16,185,129,0.15); border: 1px solid var(--accent-emerald); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; color: var(--accent-emerald); }
         .card-name { font-size: 1.1rem; font-weight: 700; }
-        .card-bio { font-size: 0.88rem; color: var(--text-muted); }
-        .card-btn { background-color: var(--accent-secondary); width: auto; align-self: flex-start; padding: 6px 16px; font-size: 0.85rem; }
-        .chat-box { background-color: #0f172a; height: 300px; border-radius: 8px; border: 1px solid #334155; padding: 15px; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
-        .message-wrapper { display: flex; flex-direction: column; max-width: 85%; }
+        .card-btn { background-color: var(--accent-blue); width: auto; align-self: flex-start; padding: 6px 16px; font-size: 0.85rem; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
+        
+        .chat-box { flex: 1; background-color: #1e293b; border-radius: 8px; border: 1px solid #334155; padding: 15px; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px; }
+        .message-wrapper { display: flex; flex-direction: column; max-width: 80%; }
         .message-wrapper.incoming { align-self: flex-start; }
         .message-wrapper.outgoing { align-self: flex-end; }
         .message { padding: 8px 12px; border-radius: 10px; font-size: 0.92rem; }
         .incoming .message { background-color: #334155; }
-        .outgoing .message { background-color: var(--accent-primary); }
+        .outgoing .message { background-color: var(--accent-emerald); }
         .chat-input-area { display: flex; gap: 8px; }
         .chat-input-area input { flex: 1; }
-        .chat-input-area button { width: auto; background-color: var(--accent-secondary); }
-        .match-banner { background-color: rgba(59,130,246,0.15); border: 1px solid var(--accent-secondary); padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-size: 0.9rem; color: #60a5fa; }
+        .chat-input-area button { width: auto; background-color: var(--accent-blue); }
+        .header-controls { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="invite-alert-bar" id="global-invite-panel">
-        <span id="invite-message-text">Incoming chat request...</span>
-        <button class="invite-btn" onclick="acceptIncomingChatHandshake()">Join Chat 💬</button>
-    </div>
-
     <div class="container active-view" id="auth-view">
         <h1 id="auth-title">Create Account</h1>
-        <div class="subtitle">Join anonymously on Commute</div>
         <div class="form-group"><label>Gmail ID or Mobile Number</label><input type="text" id="auth-contact"></div>
         <div class="form-group"><label>Password</label><input type="password" id="auth-password"></div>
         <button onclick="executeAuth()">Sign Up</button>
@@ -65,185 +75,192 @@
         <h2>Set Up Profile</h2>
         <div class="form-group"><label>Anonymous Alias Handle</label><input type="text" id="p-username"></div>
         <div class="form-group"><label>Bio</label><textarea id="p-bio"></textarea></div>
-        <div class="form-group">
-            <label>Traits</label>
-            <div class="tag-grid">
-                <div class="tag" onclick="toggleSelection(this, 'traits', 'Introverted')">🎭 Introverted</div>
-                <div class="tag" onclick="toggleSelection(this, 'traits', 'Extroverted')">⚡ Extroverted</div>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Interests</label>
-            <div class="tag-grid">
-                <div class="tag" onclick="toggleSelection(this, 'interests', 'Coding')">💻 Coding</div>
-                <div class="tag" onclick="toggleSelection(this, 'interests', 'Music')">🎵 Music</div>
-            </div>
-        </div>
-        <button onclick="saveProfileData()">Save & View Discover Feed ✨</button>
+        <div class="form-group"><label>Traits</label><div class="tag-grid"><div class="tag" onclick="toggleSelection(this, 'traits', 'Introverted')">🎭 Introverted</div><div class="tag" onclick="toggleSelection(this, 'traits', 'Extroverted')">⚡ Extroverted</div></div></div>
+        <div class="form-group"><label>Interests</label><div class="tag-grid"><div class="tag" onclick="toggleSelection(this, 'interests', 'Coding')">💻 Coding</div><div class="tag" onclick="toggleSelection(this, 'interests', 'Music')">🎵 Music</div></div></div>
+        <button onclick="saveProfileData()">Enter Core App Network ✨</button>
     </div>
 
-    <div class="container" id="discover-view">
-        <h2>Kindred Discovery Feed</h2>
-        <button onclick="loadDiscoverDashboard()" style="background-color: #475569; margin-bottom: 15px;">🔄 Refresh Feed</button>
-        <div class="discover-list" id="discover-list-container"></div>
-    </div>
-
-    <div class="container" id="chat-view">
-        <h2>Secure Chat Room</h2>
-        <div id="chat-banner-info" class="match-banner">Connecting...</div>
-        <div class="chat-box" id="chat-box-area"></div>
-        <div class="chat-input-area">
-            <input type="text" id="msg-input" onkeypress="if(event.key==='Enter') sendDirectMessage()">
-            <button onclick="sendDirectMessage()">Send 📩</button>
+    <div class="container" id="main-hud-view" style="max-width: 1000px; width: 100%;">
+        <div class="header-controls">
+            <h2 style="margin:0; text-align:left;">Commute Core HUD</h2>
+            <div style="font-weight: bold; color: var(--accent-emerald);" id="hud-user-identity">User: Anonymous</div>
         </div>
-        <button onclick="loadDiscoverDashboard()" style="background-color: #ef4444; margin-top: 15px;">🚪 Exit Chat Room</button>
+        
+        <div class="dashboard-layout">
+            <div class="sidebar">
+                <div class="channel-tab active-channel" id="tab-discover" onclick="switchActiveWorkspace('discover')">🌐 Discovery Feed</div>
+                
+                <div class="sidebar-section-title">Global Squad Rooms</div>
+                <div class="channel-tab" id="tab-room-nagpur" onclick="switchActiveWorkspace('chat', 'room_nagpur', 'Nagpur Engineering Squad')">🏢 Nagpur Engineering</div>
+                <div class="channel-tab" id="tab-room-general" onclick="switchActiveWorkspace('chat', 'room_general', 'Global Sandbox Lounges')">💬 Global Lounges</div>
+                
+                <div class="sidebar-section-title" id="dm-section-header">Private Sync Lines</div>
+                <div id="dm-channels-injection-vault"></div>
+            </div>
+
+            <div class="main-workspace">
+                <div class="discover-workspace active-workspace" id="space-discover">
+                    <button onclick="fetchDiscoverMatches()" style="background-color: #475569; margin-bottom:10px;">🔄 Reload System Matrix</button>
+                    <div id="matrix-tiles-container" style="display:flex; flex-direction:column; gap:12px;"></div>
+                </div>
+
+                <div class="chat-workspace" id="space-chat">
+                    <div id="active-chat-room-title" style="font-weight:bold; color:var(--accent-blue); padding-bottom:10px; border-bottom:1px solid #334155; margin-bottom:10px;">Channel Active</div>
+                    <div class="chat-box" id="hud-chat-viewport-logs"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="hud-chat-input-field" onkeypress="if(event.key==='Enter') transmitSocketMessage()">
+                        <button onclick="transmitSocketMessage()">Send 📩</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 <script>
-    // Initialize standard core background socket loop early so it can catch invitations immediately
-    const globalSocket = io();
+    const socket = io();
     
-    let currentUserId = "";
-    let myRegisteredAlias = "";
-    let isLoginMode = false;
-    let currentRoomId = "";
-    let deepInviteCache = null;
+    let currentUserId = "", myRegisteredAlias = "", isLoginMode = false;
+    let currentActiveRoomId = "discover";
+    let activeChatChannelsCache = {}; 
+    let chatHistoryLogsMemory = {}; 
 
-    let formTraits = [];
-    let formInterests = [];
+    let formTraits = [], formInterests = [];
 
-    // Global listener to trap inbound cross-tab connection pings instantly
-    globalSocket.on('incoming_chat_invite', (data) => {
-        deepInviteCache = data;
-        document.getElementById('invite-message-text').innerText = `🔔 ${data.senderName} wants to chat with you!`;
-        document.getElementById('global-invite-panel').style.display = "flex";
+    // Background listener captures invitations from User 3, 4, etc. without shifting your current workspace page position!
+    socket.on('incoming_chat_invite', (data) => {
+        registerNewChatChannelLane(data.roomId, data.senderName, data.senderId);
+        if (currentActiveRoomId !== data.roomId) {
+            document.getElementById(`unread-${data.roomId}`).style.display = "block";
+        }
     });
 
-    function toggleAuthMode() {
-        isLoginMode = !isLoginMode;
-        document.getElementById('auth-title').innerText = isLoginMode ? "Log In" : "Create Account";
-    }
+    socket.on('receive_message', (data) => {
+        // Queue the incoming message text log right into memory array
+        if (!chatHistoryLogsMemory[data.room]) chatHistoryLogsMemory[data.room] = [];
+        chatHistoryLogsMemory[data.room].push(data);
 
-    function toggleSelection(element, type, val) {
-        let arr = type === 'traits' ? formTraits : formInterests;
-        element.classList.toggle(type === 'traits' ? 'selected-trait' : 'selected-interest');
-        if (arr.includes(val)) arr = arr.filter(v => v !== val); else arr.push(val);
-        if (type === 'traits') formTraits = arr; else formInterests = arr;
-    }
+        // If you are currently viewing this room, render it right down onto the screen layout logs immediately
+        if (currentActiveRoomId === data.room) {
+            appendUIMessageElement(data.sender, data.message, data.senderId === currentUserId ? 'outgoing' : 'incoming');
+        } else {
+            // Trigger amber notification dot instantly on the side channel tab matching that room ID key marker
+            if (document.getElementById(`unread-${data.room}`)) {
+                document.getElementById(`unread-${data.room}`).style.display = "block";
+            }
+        }
+    });
 
-    function showView(viewId) {
-        document.querySelectorAll('.container').forEach(el => el.classList.remove('active-view'));
-        document.getElementById(viewId).classList.add('active-view');
-    }
+    function toggleAuthMode() { isLoginMode = !isLoginMode; document.getElementById('auth-title').innerText = isLoginMode ? "Log In" : "Create Account"; }
+    function toggleSelection(el, type, val) { el.classList.toggle(type === 'traits' ? 'selected-trait' : 'selected-interest'); let arr = type === 'traits' ? formTraits : formInterests; if (arr.includes(val)) arr = arr.filter(v => v !== val); else arr.push(val); if (type === 'traits') formTraits = arr; else formInterests = arr; }
+    function showView(viewId) { document.querySelectorAll('.container').forEach(el => el.classList.remove('active-view')); document.getElementById(viewId).classList.add('active-view'); }
 
     async function executeAuth() {
         const contact = document.getElementById('auth-contact').value.trim();
         const password = document.getElementById('auth-password').value.trim();
         const path = isLoginMode ? '/api/auth/login' : '/api/auth/signup';
-        
         const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contact, password }) });
         const data = await res.json();
         if (data.error) return alert(data.error);
 
         currentUserId = data.userId;
-        
-        // Register connection map session right onto the server RAM channel
-        globalSocket.emit('register_network_user', currentUserId);
+        socket.emit('register_network_user', currentUserId);
 
-        if (isLoginMode && data.hasProfile) loadDiscoverDashboard(); else showView('profile-view');
+        // Join global multi-user text loops right on launch startup structure
+        socket.emit('join_room', 'room_nagpur');
+        socket.emit('join_room', 'room_general');
+
+        if (isLoginMode && data.hasProfile) triggerHUDLaunch(); else showView('profile-view');
     }
 
     async function saveProfileData() {
         myRegisteredAlias = document.getElementById('p-username').value.trim();
-        const bio = document.getElementById('p-bio').value.trim();
-        
-        await fetch('/api/profile/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: currentUserId, username: myRegisteredAlias, bio, traits: formTraits, interests: formInterests })
-        });
-        loadDiscoverDashboard();
+        await fetch('/api/profile/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: currentUserId, username: myRegisteredAlias, bio: document.getElementById('p-bio').value.trim(), traits: formTraits, interests: formInterests }) });
+        triggerHUDLaunch();
     }
 
-    async function loadDiscoverDashboard() {
-        showView('discover-view');
+    function triggerHUDLaunch() {
+        showView('main-hud-view');
+        document.getElementById('hud-user-identity').innerText = `User: ${myRegisteredAlias || 'Anonymous Handle'}`;
+        fetchDiscoverMatches();
+    }
+
+    async function fetchDiscoverMatches() {
         const res = await fetch(`/api/discover/${currentUserId}`);
         const matches = await res.json();
-        
-        const container = document.getElementById('discover-list-container');
-        container.innerHTML = matches.length === 0 ? "<div class='subtitle'>No other active users online yet.</div>" : "";
-
+        const container = document.getElementById('matrix-tiles-container');
+        container.innerHTML = matches.length === 0 ? "<div class='subtitle'>Scanning network array...</div>" : "";
         matches.forEach(peer => {
-            const card = document.createElement('div');
-            card.className = "user-card";
-            card.innerHTML = `
-                <div class="match-pct">${peer.matchScore}% Match</div>
-                <div class="card-name">${peer.username}</div>
-                <div class="card-bio">${peer.bio}</div>
-                <button class="card-btn" onclick="sendChatInvitationRequest('${peer.id}', '${peer.username}')">Chat 💬</button>
-            `;
+            const card = document.createElement('div'); card.className = "user-card";
+            card.innerHTML = `<div class="match-pct">${peer.matchScore}% Match</div><div class="card-name">${peer.username}</div><button class="card-btn" onclick="initiateOutboundDMChannel('${peer.id}', '${peer.username}')">Sync Chat 💬</button>`;
             container.appendChild(card);
         });
     }
 
-    // 🔥 OUTBOUND HANDSHAKE: Notify the third person instantly over the socket grid
-    function sendChatInvitationRequest(peerId, peerName) {
-        currentRoomId = [currentUserId.toString(), peerId.toString()].sort().join("_");
+    function initiateOutboundDMChannel(peerId, peerName) {
+        const generatedRoomId = [currentUserId.toString(), peerId.toString()].sort().join("_");
+        registerNewChatChannelLane(generatedRoomId, peerName, peerId);
         
-        // Fire request payload packet down to the recipient
-        globalSocket.emit('request_chat_handshake', {
-            targetPeerId: peerId,
-            senderId: currentUserId,
-            senderName: myRegisteredAlias || "Anonymous Soul",
-            roomId: currentRoomId
-        });
-
-        // Drop sender into the unified chat lane automatically
-        launchLiveChatPanel(currentRoomId, peerName);
+        // Notify targeted profile socket directly down the line to append their dashboard sidebar dynamically
+        socket.emit('request_chat_handshake', { targetPeerId: peerId, senderId: currentUserId, senderName: myRegisteredAlias || "Anonymous Soul", roomId: generatedRoomId });
+        
+        // Immediately load the viewport pane focus straight onto this room channel lane trigger
+        switchActiveWorkspace('chat', generatedRoomId, peerName);
     }
 
-    // 🔥 INBOUND ACCEPTANCE: Fired when user clicks the drop-down notification alert bar
-    function acceptIncomingChatHandshake() {
-        if (!deepInviteCache) return;
-        document.getElementById('global-invite-panel').style.display = "none";
-        
-        currentRoomId = deepInviteCache.roomId;
-        launchLiveChatPanel(currentRoomId, deepInviteCache.senderName);
-        deepInviteCache = null;
+    function registerNewChatChannelLane(roomId, label, peerId) {
+        if (activeChatChannelsCache[roomId]) return; 
+        activeChatChannelsCache[roomId] = true;
+        socket.emit('join_room', roomId);
+
+        const box = document.getElementById('dm-channels-injection-vault');
+        const tab = document.createElement('div');
+        tab.className = "channel-tab"; tab.id = `tab-${roomId}`;
+        tab.onclick = () => switchActiveWorkspace('chat', roomId, label);
+        tab.innerHTML = `<span>👤 ${label}</span><div class="unread-indicator" id="unread-${roomId}" style="display:none;"></div>`;
+        box.appendChild(tab);
     }
 
-    function launchLiveChatPanel(roomId, partnerName) {
-        showView('chat-view');
-        document.getElementById('chat-box-area').innerHTML = ""; // Wipe cleanly
-        document.getElementById('chat-banner-info').innerText = `Chat Link Active with: ${partnerName}`;
+    function switchActiveWorkspace(type, roomId = 'discover', roomLabel = '') {
+        currentActiveRoomId = roomId;
+        document.querySelectorAll('.channel-tab').forEach(el => el.classList.remove('active-channel'));
+        document.querySelectorAll('.discover-workspace, .chat-workspace').forEach(el => el.classList.remove('active-workspace'));
         
-        globalSocket.emit('join_room', roomId);
+        // Wipe notification dot cleanly off layout view
+        if (document.getElementById(`unread-${roomId}`)) document.getElementById(`unread-${roomId}`).style.display = "none";
 
-        globalSocket.off('receive_message');
-        globalSocket.on('receive_message', (data) => {
-            if (data.senderId !== currentUserId) {
-                appendMsg(data.sender, data.message, 'incoming');
+        if (type === 'discover') {
+            document.getElementById('tab-discover').classList.add('active-channel');
+            document.getElementById('space-discover').classList.add('active-workspace');
+        } else {
+            document.getElementById(`tab-${roomId}`).classList.add('active-channel');
+            document.getElementById('space-chat').classList.add('active-workspace');
+            document.getElementById('active-chat-room-title').innerText = `💬 Active Channel: ${roomLabel}`;
+            
+            // Reload historical lines cached inside memory index onto the scroll log cleanly
+            const logViewport = document.getElementById('hud-chat-viewport-logs');
+            logViewport.innerHTML = "";
+            if (chatHistoryLogsMemory[roomId]) {
+                chatHistoryLogsMemory[roomId].forEach(data => {
+                    appendUIMessageElement(data.sender, data.message, data.senderId === currentUserId ? 'outgoing' : 'incoming');
+                });
             }
-        });
+        }
     }
 
-    function sendDirectMessage() {
-        const input = document.getElementById('msg-input');
-        const msg = input.value.trim();
-        if (!msg) return;
-
-        globalSocket.emit('send_message', { room: currentRoomId, sender: myRegisteredAlias, senderId: currentUserId, message: msg });
-        appendMsg('You', msg, 'outgoing');
+    function transmitSocketMessage() {
+        const input = document.getElementById('hud-chat-input-field');
+        const text = input.value.trim();
+        if (!text || currentActiveRoomId === 'discover') return;
+        socket.emit('send_message', { room: currentActiveRoomId, sender: myRegisteredAlias || 'Anonymous', senderId: currentUserId, message: text });
         input.value = "";
     }
 
-    function appendMsg(sender, text, type) {
-        const box = document.getElementById('chat-box-area');
-        const wrap = document.createElement('div');
-        wrap.className = `message-wrapper ${type}`;
+    function appendUIMessageElement(sender, text, alignment) {
+        const logBox = document.getElementById('hud-chat-viewport-logs');
+        const wrap = document.createElement('div'); wrap.className = `message-wrapper ${alignment}`;
         wrap.innerHTML = `<div class="message"><strong>${sender}:</strong> ${text}</div>`;
-        box.appendChild(wrap);
-        box.scrollTop = box.scrollHeight;
+        logBox.appendChild(wrap);
+        logBox.scrollTop = logBox.scrollHeight;
     }
 </script>
 </body>
