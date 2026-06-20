@@ -39,6 +39,11 @@ app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 
+// 🔥 LIVE PATH FIX: Map the home domain path root strictly to your public UI dashboard asset file!
+app.get('/', (request, response) => {
+    response.sendFile(__dirname + '/public/index.html');
+});
+
 // Signup
 app.post('/api/auth/signup', async (request, response) => {
     try {
@@ -108,14 +113,13 @@ app.get('/api/discover/:userId', async (request, response) => {
             allOtherUsers = await User.find({ _id: { $ne: currentUserId } });
         } else {
             currentUser = sandboxUsers.find(u => u._id === currentUserId);
-            // 🔥 FIXED EXCLUSION: Strict string matching to completely block yourself from showing up
             allOtherUsers = sandboxUsers.filter(u => u._id.toString() !== currentUserId.toString());
         }
 
         if (!currentUser) currentUser = { traits: [], interests: [], dislikes: [] };
 
         let matchFeed = allOtherUsers.map(user => {
-            let score = 50; // default baseline match %
+            let score = 50; 
             if (currentUser.traits) {
                 user.traits.forEach(t => { if (currentUser.traits.includes(t)) score += 10; });
                 user.interests.forEach(i => { if (currentUser.interests.includes(i)) score += 5; });
@@ -145,7 +149,6 @@ io.on('connection', (socket) => {
 
     socket.on('send_message', (data) => {
         console.log(`📩 Routing: [${data.sender}] -> Room [${data.room}]: ${data.message}`);
-        // Broadcasts explicitly to the specific targeted room channel matching across both browsers
         io.to(data.room).emit('receive_message', data);
     });
 
