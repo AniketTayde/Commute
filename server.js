@@ -5,6 +5,7 @@ const server = http.createServer(app);
 const { Server } = require('socket.io');
 const io = new Server(server);
 const mongoose = require('mongoose');
+const path = require('path'); // 🔥 Added the path library for cross-platform compliance
 
 const LOCAL_DB_URL = "mongodb://127.0.0.1:27017/CommuteDB";
 const CLOUD_DB_URL = "mongodb+srv://Aniket001:Wi5iVScdg3uvGBno@cluster0.j3031go.mongodb.net/CommuteDB?retryWrites=true&w=majority&appName=Cluster0&tlsAllowInvalidCertificates=true";
@@ -31,17 +32,18 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-// Memory RAM array for perfect database replication locally
 let sandboxUsers = [];
 
 app.use(express.json());
-app.use(express.static('public'));
+
+// 🔥 FIX 1: Point your static files middleware using an explicit absolute directory path
+app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 
-// 🔥 LIVE PATH FIX: Map the home domain path root strictly to your public UI dashboard asset file!
+// 🔥 FIX 2: Point the main home page root strictly to your resolved index file pathway
 app.get('/', (request, response) => {
-    response.sendFile(__dirname + '/public/index.html');
+    response.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Signup
@@ -101,7 +103,7 @@ app.post('/api/profile/save', async (request, response) => {
     } catch (err) { response.status(500).json({ error: "Error saving profile" }); }
 });
 
-// Discovery Engine (CRITICAL FIX HERE)
+// Discovery Engine
 app.get('/api/discover/:userId', async (request, response) => {
     try {
         const currentUserId = request.params.userId;
